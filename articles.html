@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Article Master · ParasERP</title>
+</head>
+<body>
+<script src="common.js"></script>
+<script>
+
+initStorage(); injectStyles(); renderShell("Article Master","Create and maintain raw, semi-finished, and finished articles.");
+document.getElementById("top-actions").innerHTML = `<button class="btn primary" id="addArticle">+ New article</button>`;
+let editingHead = null;
+
+function articleRows(filter="") {
+  const articles = getArticles().filter(a => `${a.head} ${a.name} ${a.type}`.toLowerCase().includes(filter.toLowerCase()));
+  return articles.map(a=>`<tr>
+    <td><strong>${esc(a.name)}</strong><div class="muted mono">${esc(a.head)}</div></td>
+    <td><span class="badge ${a.type}">${typeLabel(a.type)}</span></td>
+    <td><strong>${a.qty}</strong></td><td>${a.type==="raw"?a.min_qty:"—"}</td>
+    <td>${a.type==="raw"?"—":Object.keys(a.bom||{}).length+" components"}</td>
+    <td><button class="btn small" data-edit="${esc(a.head)}">Edit</button> <button class="btn small danger" data-delete="${esc(a.head)}">Delete</button></td>
+  </tr>`).join("") || `<tr><td colspan="6" class="empty">No articles found.</td></tr>`;
+}
+document.getElementById("page-content").innerHTML = `
+<div class="card">
+ <div class="card-head"><h2>Article catalog</h2><span class="muted" id="article-count"></span></div>
+ <div class="card-body"><div class="toolbar"><input id="search" class="field search" placeholder="Search head, name, type..." /><div class="grow"></div></div>
+ <div class="table-wrap"><table class="table"><thead><tr><th>Article</th><th>Type</th><th>On hand</th><th>Min qty</th><th>BOM</th><th>Actions</th></tr></thead><tbody id="articleRows"></tbody></table></div></div>
+</div>
+<div class="modal-backdrop" id="modal"><div class="modal"><div class="modal-head"><h2 id="modalTitle">New article</h2><button class="close" id="closeModal">×</button></div><div class="modal-body"><form id="articleForm">
+<div class="form-grid">
+<div class="field"><label>HEAD / ID *</label><input id="head" required placeholder="e.g. RAW-004"></div>
+<div class="field"><label>NAME *</label><input id="name" required placeholder="Article name"></div>
+<div class="field"><label>TYPE *</label><select id="type"><option value="raw">Raw</option><option value="semi">Semi-Finished</option><option value="finished">Finished</option></select></div>
+<div class="field"><label>ON-HAND QTY *</label><input id="qty" type="number" min="0" step="1" value="0" required></div>
+<div class="field" id="minField"><label>MIN QTY / REORDER THRESHOLD *</label><input id="min_qty" type="number" min="0" step="1" value="0"></div>
+<div class="full" id="bomField" style="display:none"><div class="section-label">Bill of materials</div><div class="bom-box"><div id="bomRows"></div><button type="button" class="btn small" id="addBom">+ Add component</button></div></div>
+</div><div class="form-actions"><button type="button" class="btn" id="cancel">Cancel</button><button class="btn primary">Save article</button></div>
+</form></div></div></div>`;
+const modal=document.getElementById("modal"), typeEl=document.getElementById("type"), bomField=document.getElementById("bomField"), minField=document.getElementById("minField"), bomRows=document.getElementById("bomRows");
+
+function refresh(){const list=getArticles();document.getElementById("articleRows").innerHTML=articleRows(document.getElementById("search").value);document.getElementById("article-count").textContent=`${list.length} articles`;document.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>openEdit(b.dataset.edit));document.querySelectorAll("[data-delete]").forEach(b=>b.onclick=()=>deleteArticle(b.dataset.delete));}
+function optionsFor(type, current=""){return getArticles().filter(a=>a.type!=="finished" && (type==="semi"?a.type==="raw":["raw","semi"].includes(a.type))).map(a=>`<option value="${esc(a.head)}" ${a.head===current?"selected":""}>${esc(a.head)} — ${esc(a.name)}</option>`).join("")}
+function addBomRow(head="",qty=1){const row=document.createElement("div");row.className="bom-row";row.innerHTML=`<select class="bom-head"><option value="">Select component</option>${optionsFor(typeEl.value,head)}</select><input class="bom-qty" type="number" min="1" step="1" value="${qty}"><button type="button" class="btn small danger remove-bom">×</button>`;row.querySelector(".remove-bom").onclick=()=>row.remove();bomRows.appendChild(row);}
+function updateType(){const raw=typeEl.value==="raw";minField.style.display=raw?"block":"none";bomField.style.display=raw?"none":"block";if(!raw && !bomRows.children.length)addBomRow();if(raw)bomRows.innerHTML=""}
+function openNew(){editingHead=null;document.getElementById("modalTitle").textContent="New article";document.getElementById("articleForm").reset();document.getElementById("qty").value=0;document.getElementById("min_qty").value=0;bomRows.innerHTML="";updateType();modal.classList.add("show")}
+function openEdit(head){const a=getArticles().find(x=>x.head===head);if(!a)return;editingHead=head;document.getElementById("modalTitle").textContent="Edit article";document.getElementById("head").value=a.head;document.getElementById("name").value=a.name;document.getElementById("type").value=a.type;document.getElementById("qty").value=a.qty;document.getElementById("min_qty").value=a.min_qty||0;bomRows.innerHTML="";updateType();Object.entries(a.bom||{}).forEach(([h,q])=>addBomRow(h,q));modal.classList.add("show")}
+function close(){modal.classList.remove("show")}
+function deleteArticle(head){const a=getArticles().find(x=>x.head===head), reason=canDeleteArticle(head);if(reason){toast(reason,"error");return}if(confirm(`Delete ${a.name} (${head})?`)){setArticles(getArticles().filter(x=>x.head!==head));refresh();toast("Article deleted.")}}
+document.getElementById("addArticle").onclick=openNew;document.getElementById("closeModal").onclick=close;document.getElementById("cancel").onclick=close;typeEl.onchange=updateType;document.getElementById("addBom").onclick=()=>addBomRow();document.getElementById("search").oninput=refresh;
+document.getElementById("articleForm").onsubmit=e=>{e.preventDefault();try{const bom={};document.querySelectorAll(".bom-row").forEach(r=>{const h=r.querySelector(".bom-head").value,q=Number(r.querySelector(".bom-qty").value);if(h)bom[h]=q});saveArticle({head:head.value,name:name.value,type:type.value,qty:Number(qty.value),min_qty:Number(min_qty.value),bom},editingHead);close();refresh();toast("Article saved.");}catch(err){toast(err.message,"error")}};
+refresh();
+
+</script>
+</body>
+</html>

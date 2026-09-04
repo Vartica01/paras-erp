@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Stock Movements · ParasERP</title>
+</head>
+<body>
+<script src="common.js"></script>
+<script>
+
+initStorage(); injectStyles(); renderShell("Stock Movements","Record manual receipts, issues, and adjustments.");
+document.getElementById("top-actions").innerHTML=`<button class="btn primary" id="addMovement">+ Record movement</button>`;
+document.getElementById("page-content").innerHTML=`
+<div class="card">
+<div class="card-head"><h2>Movement log</h2><span class="muted" id="movement-count"></span></div>
+<div class="card-body"><div class="toolbar"><input id="search" class="field search" placeholder="Search article or reason..."><select id="directionFilter" class="field" style="width:150px"><option value="">All directions</option><option value="in">IN</option><option value="out">OUT</option></select><div class="grow"></div></div>
+<div class="table-wrap"><table class="table"><thead><tr><th>Article</th><th>Direction</th><th>Qty</th><th>Reason</th><th>Source</th><th>Timestamp</th></tr></thead><tbody id="movementRows"></tbody></table></div></div>
+</div>
+<div class="modal-backdrop" id="modal"><div class="modal"><div class="modal-head"><h2>Record stock movement</h2><button class="close" id="close">×</button></div><div class="modal-body"><form id="movementForm"><div class="form-grid">
+<div class="field full"><label>ARTICLE *</label><select id="mhead" required></select></div>
+<div class="field"><label>DIRECTION *</label><select id="direction"><option value="in">IN — Add stock</option><option value="out">OUT — Remove stock</option></select></div>
+<div class="field"><label>QUANTITY *</label><input id="mqty" type="number" min="1" step="1" required></div>
+<div class="field full"><label>REASON</label><input id="reason" placeholder="e.g. Purchase, adjustment, damaged stock"></div>
+</div><div class="form-actions"><button type="button" class="btn" id="cancel">Cancel</button><button class="btn primary">Post movement</button></div></form></div></div></div>`;
+const modal=document.getElementById("modal");
+function populate(){mhead.innerHTML=getArticles().map(a=>`<option value="${esc(a.head)}">${esc(a.head)} — ${esc(a.name)} (stock: ${a.qty})</option>`).join("")}
+function refresh(){const q=search.value.toLowerCase(),f=directionFilter.value,articles=articleMap();const rows=getMovements().filter(m=>(!f||m.direction===f)&&(`${m.head} ${articles[m.head]?.name||""} ${m.reason}`.toLowerCase().includes(q)));document.getElementById("movement-count").textContent=`${rows.length} movements`;movementRows.innerHTML=rows.map(m=>`<tr><td><strong>${esc(articles[m.head]?.name||m.head)}</strong><div class="muted mono">${esc(m.head)}</div></td><td><span class="badge ${m.direction}">${m.direction.toUpperCase()}</span></td><td><strong>${m.qty}</strong></td><td>${esc(m.reason)}</td><td class="mono muted">${esc(m.sourceId||"Manual")}</td><td class="muted">${formatDate(m.timestamp)}</td></tr>`).join("")||`<tr><td colspan="6" class="empty">No movements found.</td></tr>`}
+document.getElementById("addMovement").onclick=()=>{populate();document.getElementById("movementForm").reset();modal.classList.add("show")};close.onclick=cancel.onclick=()=>modal.classList.remove("show");search.oninput=directionFilter.onchange=refresh;
+document.getElementById("movementForm").onsubmit=e=>{e.preventDefault();try{addMovement(mhead.value,direction.value,Number(mqty.value),reason.value);modal.classList.remove("show");refresh();toast("Stock movement posted.");}catch(err){toast(err.message,"error")}};refresh();
+
+</script>
+</body>
+</html>

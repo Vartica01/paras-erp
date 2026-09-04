@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dashboard · ParasERP</title>
+</head>
+<body>
+<script src="common.js"></script>
+<script>
+
+initStorage(); injectStyles(); renderShell("Dashboard","A real-time view of inventory health and production readiness.");
+
+const articles = getArticles(), low = articles.filter(a=>a.type==="raw" && a.qty < a.min_qty);
+const producible = articles.filter(a=>a.type!=="raw").map(a=>({...a,can:producibleQty(a)}));
+const movements = getMovements().slice(0,8);
+
+document.getElementById("page-content").innerHTML = `
+<div class="grid grid-4">
+  <div class="card stat"><div class="label">TOTAL ARTICLES</div><div class="value">${articles.length}</div><div class="hint">Across all three tiers</div></div>
+  <div class="card stat"><div class="label">LOW-STOCK ITEMS</div><div class="value">${low.length}</div><div class="hint">Raw materials below threshold</div></div>
+  <div class="card stat"><div class="label">ON-HAND UNITS</div><div class="value">${articles.reduce((s,a)=>s+a.qty,0).toLocaleString()}</div><div class="hint">Total physical stock</div></div>
+  <div class="card stat"><div class="label">PRODUCIBLE NOW</div><div class="value">${producible.filter(x=>x.can>0).length}</div><div class="hint">Products with available BOM stock</div></div>
+</div>
+<div style="height:16px"></div>
+<div class="grid grid-2">
+  <div class="card">
+    <div class="card-head"><h2>Low-stock alerts</h2><a class="btn small" href="articles.html">View articles</a></div>
+    <div class="card-body">${low.length ? `<div class="kpi-list">${low.map(a=>`<div class="kpi-row"><div><strong>${esc(a.name)}</strong><div class="muted mono">${esc(a.head)}</div></div><div style="text-align:right"><span class="badge low">${a.qty} on hand</span><div class="muted" style="font-size:10px;margin-top:4px">min ${a.min_qty}</div></div></div>`).join("")}</div>` : `<div class="empty">All raw materials are above their reorder thresholds.</div>`}</div>
+  </div>
+  <div class="card">
+    <div class="card-head"><h2>What can I make now?</h2><a class="btn small" href="production.html">Production</a></div>
+    <div class="card-body"><div class="kpi-list">${producible.map(a=>`<div class="kpi-row"><div><strong>${esc(a.name)}</strong><div class="muted">${typeLabel(a.type)}</div></div><span class="number-pill">${a.can}</span></div>`).join("")}</div></div>
+  </div>
+</div>
+<div style="height:16px"></div>
+<div class="card">
+  <div class="card-head"><h2>Recent stock movements</h2><a class="btn small" href="stock.html">View all</a></div>
+  <div class="table-wrap"><table class="table"><thead><tr><th>Article</th><th>Direction</th><th>Qty</th><th>Reason</th><th>Timestamp</th></tr></thead><tbody>
+  ${movements.length ? movements.map(m=>{const a=articles.find(x=>x.head===m.head);return `<tr><td><strong>${esc(a?.name||m.head)}</strong><div class="muted mono">${esc(m.head)}</div></td><td><span class="badge ${m.direction}">${m.direction.toUpperCase()}</span></td><td><strong>${m.qty}</strong></td><td>${esc(m.reason)}</td><td class="muted">${formatDate(m.timestamp)}</td></tr>`}).join("") : `<tr><td colspan="5" class="empty">No movements yet.</td></tr>`}
+  </tbody></table></div>
+</div>`;
+
+</script>
+</body>
+</html>

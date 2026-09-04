@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Production Orders · ParasERP</title>
+</head>
+<body>
+<script src="common.js"></script>
+<script>
+
+initStorage(); injectStyles(); renderShell("Production Orders","Consume components, track scrap, and add good output to stock.");
+document.getElementById("top-actions").innerHTML=`<button class="btn primary" id="newProduction">+ Run production</button>`;
+function render(){
+ const arts=getArticles(), products=arts.filter(a=>a.type!=="raw");
+ document.getElementById("page-content").innerHTML=`
+ <div class="grid grid-3" style="margin-bottom:16px">${products.map(a=>`<div class="card production-card"><h3>${esc(a.name)}</h3><p>${esc(a.head)} · ${typeLabel(a.type)}</p><div style="display:flex;justify-content:space-between;margin-bottom:7px;font-size:11px"><span>Producible now</span><strong>${producibleQty(a)}</strong></div><div class="progress"><span style="width:${Math.min(100,producibleQty(a)>0?100:0)}%"></span></div></div>`).join("")}</div>
+ <div class="card"><div class="card-head"><h2>Production history</h2><span class="muted">${getProductionOrders().length} orders</span></div><div class="table-wrap"><table class="table"><thead><tr><th>Order</th><th>Output</th><th>Planned</th><th>Good</th><th>Scrap</th><th>Timestamp</th></tr></thead><tbody>
+ ${getProductionOrders().map(o=>{const a=arts.find(x=>x.head===o.output_head);return `<tr><td class="mono">${esc(o.id)}</td><td><strong>${esc(a?.name||o.output_head)}</strong><div class="muted mono">${esc(o.output_head)}</div></td><td>${o.planned_qty}</td><td><span class="badge in">${o.produced_qty}</span></td><td>${o.scrap_qty}</td><td class="muted">${formatDate(o.timestamp)}</td></tr>`}).join("")||`<tr><td colspan="6" class="empty">No production orders yet.</td></tr>`}
+ </tbody></table></div></div>
+ <div class="modal-backdrop" id="modal"><div class="modal"><div class="modal-head"><h2>Run production order</h2><button class="close" id="close">×</button></div><div class="modal-body"><form id="productionForm"><div class="form-grid">
+ <div class="field full"><label>OUTPUT ARTICLE *</label><select id="phead" required></select></div>
+ <div class="field"><label>PLANNED QTY *</label><input id="planned" type="number" min="1" step="1" required></div>
+ <div class="field"><label>SCRAP QTY *</label><input id="scrap" type="number" min="0" step="1" value="0" required></div>
+ <div class="field full"><label>GOOD / PRODUCED QTY</label><input id="produced" type="number" min="0" step="1" value="0" readonly></div>
+ <div class="full" id="availability"></div>
+ </div><div class="form-actions"><button type="button" class="btn" id="cancel">Cancel</button><button class="btn primary">Run order</button></div></form></div></div></div>`;
+ const modal=document.getElementById("modal"); const products2=getArticles().filter(a=>a.type!=="raw");phead.innerHTML=products2.map(a=>`<option value="${esc(a.head)}">${esc(a.head)} — ${esc(a.name)}</option>`).join("");
+ function update(){const a=getArticles().find(x=>x.head===phead.value),p=Number(planned.value)||0,s=Number(scrap.value)||0;produced.value=Math.max(0,p-s);if(!a)return;const rows=Object.entries(a.bom||{}).map(([h,q])=>{const c=getArticles().find(x=>x.head===h),req=q*p,avail=c?.qty||0;return `<div class="kpi-row"><div><strong>${esc(c?.name||h)}</strong><div class="muted">${req} required · ${avail} available</div></div><span class="badge ${avail>=req?"ok":"low"}">${avail>=req?"Available":"Short "+(req-avail)}</span></div>`}).join("");availability.innerHTML=`<div class="section-label">Component availability</div><div class="bom-box">${rows||'<span class="muted">No BOM components.</span>'}</div>`}
+ phead.onchange=update;planned.oninput=update;scrap.oninput=update;update();
+ document.getElementById("newProduction").onclick=()=>{document.getElementById("modal").classList.add("show");update()};
+ document.getElementById("close").onclick=document.getElementById("cancel").onclick=()=>modal.classList.remove("show");
+ document.getElementById("productionForm").onsubmit=e=>{e.preventDefault();try{runProduction(phead.value,Number(planned.value),Number(produced.value),Number(scrap.value));modal.classList.remove("show");render();toast("Production order completed.");}catch(err){toast(err.message,"error")}};
+}
+render();
+
+</script>
+</body>
+</html>
